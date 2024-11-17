@@ -4,6 +4,8 @@
 #include "stm32f7xx_hal.h"
 #include "stdbool.h"
 
+// UART declaration
+extern UART_HandleTypeDef huart2;
 
 // Timer Handler declaration
 extern TIM_HandleTypeDef htim2; // Motor 1
@@ -44,7 +46,7 @@ typedef struct { // TODO: Implement this to stepping and countSteps later.
 
 
 // Motors
-#define MAX_MOTORS 4 // Max motors to be added -- You can handle upto 8 TMC2209 drivers on the same UART BUS
+#define MAX_MOTORS 1 // Max motors to be added -- You can handle upto 8 TMC2209 drivers on the same UART BUS
 extern Motor motors[MAX_MOTORS]; // Global motor array
 
 

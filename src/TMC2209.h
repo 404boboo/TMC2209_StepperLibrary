@@ -4,7 +4,6 @@
 #include "stm32f7xx_hal.h"
 #include "TMC2209_configs.h"
 
-// Variables
 
 //extern volatile uint32_t stepsTaken;
 
@@ -28,8 +27,9 @@ void TMC2209_SetSpeed(Motor *motor, uint32_t StepFrequency);
 void TMC2209_Step(Motor *motor, uint32_t steps);
 void TMC2209_Stop(Motor *motor);
 void TMC2209_Start(Motor *motor);
-void TMC2209_checkStatus(Motor *motor, bool *isStepping, uint32_t nextTotalSteps);
+void TMC2209_checkStatus(Motor *motor, bool *isStepping, uint32_t *nextTotalSteps);
 void TMC2209_SendCommand(Motor *motor, uint8_t reg_addr, uint32_t data);
 uint32_t TMC2209_ReadRegister(Motor *motor, uint8_t reg_addr);
 
 
+#endif // TMC2209_H

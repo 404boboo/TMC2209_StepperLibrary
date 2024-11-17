@@ -2,6 +2,8 @@
 #include "TMC2209_configs.h"
 
 
+// UART declaration
+UART_HandleTypeDef huart2;
 
 // Motor  definition
 Motor motors[MAX_MOTORS];
@@ -10,9 +12,9 @@ void initializeMotors() {
     // Initialize each motor in the array
     for (int i = 0; i < MAX_MOTORS; i++) {
     	// Setting all drivers on the same UART BUS
-    	motor[i].driver.id = i + 1;
-    	motor[i].driver.huart = &huart2;
-    	motor[i].driver.address =0x0(i + 1);
+    	motors[i].driver.huart = &huart2;
+    	motors[i].driver.address = 0x00 + i; // Address : 0x00, 0x01 ... Depends on MS1 AND MS2
+
     	// Motor Parameters
     	motors[i].driver.id = i + 1;
         motors[i].stepsTaken = 0;
