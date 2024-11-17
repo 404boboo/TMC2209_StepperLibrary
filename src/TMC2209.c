@@ -1,7 +1,8 @@
 #include "TMC2209.h"
 #include "TMC2209_configs.h"
 
-
+// Varaibales
+volatile uint32_t stepsTaken = 0;
 
 // Set the direction of the motor
 void TMC2209_SetDirection(TMC2209_Driver *driver, GPIO_PinState state) {
@@ -32,10 +33,11 @@ void TMC2209_SetSpeed(TMC2209_Driver *driver, uint32_t StepFrequency) {
     uint32_t timerClock = HAL_RCC_GetHCLKFreq() / prescaler ;
     uint32_t ARR = (timerClock / StepFrequency) - 1; // Auto-reload value
 
-    __HAL_TIM_SET_AUTORELOAD(driver->htim, ARR);
-    __HAL_TIM_SET_COMPARE(driver->htim, driver->step_channel, ARR / 2);
+    __HAL_TIM_SET_AUTORELOAD(driver->htim, ARR); // Period
+    __HAL_TIM_SET_COMPARE(driver->htim, driver->step_channel, ARR / 2); // Duty cycle
     TMC2209_Start(driver);
 }
+
 
 // Stop stepping
 void TMC2209_Stop(TMC2209_Driver *driver) {
@@ -49,8 +51,27 @@ void TMC2209_Start(TMC2209_Driver *driver) {
 }
 
 
+void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
+{
+  /* Prevent unused argument(s) compilation warning */
+  UNUSED(htim);
+  stepsTaken++;
+}
 
+static void TMC2209_CountSteps(TMC2209_Driver *driver, uint32_t totalSteps){ // Static for now unless we need to expose it later
+	stepsTaken = 0;
+	while (stepsTaken < totalSteps); // Wait until we reach required steps
+	HAL_Delay(1); // To not fad the cpu
 
+}
+
+void TMC2209_Step(TMC2209_Driver *driver, uint32_t steps){
+	TMC2209_Start(driver);
+
+	TMC2209_CountSteps(driver, steps);
+	TMC2209_Stop(driver);
+
+}
 
 
 

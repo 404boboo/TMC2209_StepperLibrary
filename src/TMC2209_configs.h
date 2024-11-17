@@ -2,16 +2,15 @@
 #define TMC2209_CONFIGS_H
 
 #include "stm32f7xx_hal.h"
+#include "stdbool.h"
 
-// Add Motors
 
-
-// Motor configurations
-extern TIM_HandleTypeDef htim2;
+// Timer Handler declaration
+extern TIM_HandleTypeDef htim2; // Motor 1
 
 
 // Driver structure
-typedef struct {
+typedef struct { // TODO: ADD UART support
 	uint8_t id;                       // Motor ID to identify each motor
 
     TIM_HandleTypeDef *htim;        // Timer handle for PWM generation
@@ -33,7 +32,21 @@ typedef struct {
 } TMC2209_Driver;
 
 
+typedef struct { // TODO: Implement this to stepping and countSteps later.
+    TMC2209_Driver driver;         // Driver settings for the motor
+    uint32_t stepsTaken;           // Count of steps taken
+    uint32_t totalSteps;           // Total steps the motor should take
+    bool isStepping;               // State to track if the motor is currently stepping
+} Motor;
+
+
+// Motors
+#define MAX_MOTORS 4 // Max motors to be added -- You can handle upto 8 TMC2209 drivers on the same UART BUS
+extern Motor motors[MAX_MOTORS]; // Global motor array
+
+
+
 // Function declarations
-void TMC2209_Init(void);
+void initializeMotors();
 
 #endif // TMC2209_CONFIGS_H
