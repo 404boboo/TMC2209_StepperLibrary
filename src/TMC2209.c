@@ -5,49 +5,53 @@
 volatile uint32_t stepsTaken = 0;
 
 // Set the direction of the motor
-void TMC2209_SetDirection(TMC2209_Driver *driver, GPIO_PinState state) {
-    HAL_GPIO_WritePin(driver->dir_port, driver->dir_pin, state);
+void TMC2209_SetDirection(Motor *motor, GPIO_PinState state) {
+    HAL_GPIO_WritePin(motor->driver->dir_port, motor->driver->dir_pin, state);
 }
 
 // Enable or disable the driver
-void TMC2209_EnableDriver(TMC2209_Driver *driver, GPIO_PinState state) {
-    HAL_GPIO_WritePin(driver->enn_port, driver->enn_pin, state); // LOW = motor enabled, HIGH = motor disabled
+void TMC2209_EnableDriver(Motor *motor, GPIO_PinState state) {
+    HAL_GPIO_WritePin(motor->driver->enn_port, motor->driver->enn_pin, state); // LOW = motor enabled, HIGH = motor disabled
 }
 
 
 // Read DIAG pin status
-uint8_t TMC2209_ReadDiag(TMC2209_Driver *driver) {
-    return HAL_GPIO_ReadPin(driver->diag_port, driver->diag_pin); // Returns the DIAG pin state (LOW = no errors, HIGH = errors)
+uint8_t TMC2209_ReadDiag(Motor *motor) {
+    return HAL_GPIO_ReadPin(motor->driver->diag_port, motor->driver->diag_pin); // Returns the DIAG pin state (LOW = no errors, HIGH = errors)
 }
 
 // Read INDEX position
-uint32_t TMC2209_ReadIndexStatus(TMC2209_Driver *driver) {
-    return HAL_GPIO_ReadPin(driver->index_port, driver->index_pin); // Returns the INDEX pin state
+uint32_t TMC2209_ReadIndexStatus(Motor *motor) {
+    return HAL_GPIO_ReadPin(motor->driver->index_port, motor->driver->index_pin); // Returns the INDEX pin state
 }
 
 
 // Start stepping with PWM
-void TMC2209_SetSpeed(TMC2209_Driver *driver, uint32_t StepFrequency) {
-
+void TMC2209_SetSpeed(Motor *motor, uint32_t StepFrequency) {
 	uint32_t prescaler = driver -> htim-> Init.Prescaler;
     uint32_t timerClock = HAL_RCC_GetHCLKFreq() / prescaler ;
     uint32_t ARR = (timerClock / StepFrequency) - 1; // Auto-reload value
 
-    __HAL_TIM_SET_AUTORELOAD(driver->htim, ARR); // Period
-    __HAL_TIM_SET_COMPARE(driver->htim, driver->step_channel, ARR / 2); // Duty cycle
-    TMC2209_Start(driver);
+    __HAL_TIM_SET_AUTORELOAD(motor->driver->htim, ARR); // Period
+    __HAL_TIM_SET_COMPARE(motor->driver->htim, motor->driver->step_channel, ARR / 2); // Duty cycle
 }
 
 
 // Stop stepping
-void TMC2209_Stop(TMC2209_Driver *driver) {
-	TMC2209_EnableDriver(driver, GPIO_PIN_SET);
-    HAL_TIM_PWM_Stop_IT(driver->htim, driver->step_channel);
+void TMC2209_Stop(Motor *motor) {
+	TIM_HandleTypeDef *htim = motor->driver.htim;
+	uint32_t channel = motor->driver.step_channel;
+	TMC2209_EnableDriver(motor, GPIO_PIN_SET);
+    HAL_TIM_PWM_Stop_IT(htim, channel);
 }
 
-void TMC2209_Start(TMC2209_Driver *driver) {
-	TMC2209_EnableDriver(driver, GPIO_PIN_RESET);
-    HAL_TIM_PWM_Start_IT(driver->htim, driver->step_channel);
+void TMC2209_Start(Motor *motor) {
+	TIM_HandleTypeDef *htim = motor->driver.htim;
+	uint32_t channel = motor->driver.step_channel;
+
+	TMC2209_EnableDriver(motor, GPIO_PIN_RESET);
+    HAL_TIM_PWM_Start_IT(htim, channel);
+    motor->isSteeping = true;
 }
 
 
@@ -55,23 +59,90 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 {
   /* Prevent unused argument(s) compilation warning */
   UNUSED(htim);
-  stepsTaken++;
+
+  for(int i = 0; i < MAX_MOTORS; i++){
+	  if (htim->Istance == motors[i].driver.htim->Instance){ // Check which motor's timer called back
+		  motors[i].stepsTaken++;  // increment counter
+	  }
+  }
+
 }
 
-static void TMC2209_CountSteps(TMC2209_Driver *driver, uint32_t totalSteps){ // Static for now unless we need to expose it later
-	stepsTaken = 0;
-	while (stepsTaken < totalSteps); // Wait until we reach required steps
+static void TMC2209_CountSteps(Motor *motor, uint32_t totalSteps){ // Static for now unless we need to expose it later
+	motor->nextTotalSteps = totalSteps;
+	motor->stepsTaken = 0;
+	while (motor->stepsTaken <= motor->nextTotalSteps); // Wait until we reach required steps
 	HAL_Delay(1); // To not fad the cpu
 
+	motor->nextTotalSteps = 0;
 }
 
-void TMC2209_Step(TMC2209_Driver *driver, uint32_t steps){
-	TMC2209_Start(driver);
-
-	TMC2209_CountSteps(driver, steps);
-	TMC2209_Stop(driver);
+void TMC2209_Step(Motor *motor, uint32_t steps){
+	TMC2209_Start(motor);
+	TMC2209_CountSteps(motor, steps);
+	TMC2209_Stop(motor);
 
 }
+
+void TMC2209_checkStatus(Motor *motor, bool *isStepping, uint32_t nextTotalSteps){
+	 *isStepping = motor->isStepping
+     *nextTotalSteps = motor->nextTotalSteps;
+}
+
+
+void TMC2209_SendCommand(Motor *motor, uint8_t reg_addr, uint32_t data) {
+    uint8_t command[8];
+    command[0] = 0x00; // Start byte
+    command[1] = motor->driver->address; // Driver address
+    command[2] = reg_addr; // Register address
+    command[3] = (data & 0xFF); // Send data (lower byte)
+    command[4] = (data >> 8) & 0xFF;
+    command[5] = (data >> 16) & 0xFF;
+    command[6] = (data >> 24) & 0xFF;
+
+    // Calculate CRC TODO: finish Checksum function
+   // command[7] = CHECKSUM -- OPTIONAL
+
+    // Transmit via UART
+    HAL_UART_Transmit(motor->driver->huart, command, sizeof(command), HAL_MAX_DELAY);
+}
+
+// Read a register from the driver
+uint32_t TMC2209_ReadRegister(Motor *motor, uint8_t reg_addr) {
+    uint8_t command[8];
+    uint8_t reply[6]; // Expected response size
+    uint32_t data = 0;
+
+    // Prepare read command
+    command[0] = 0x00; // Start byte
+    command[1] = driver->address; // Driver address
+    command[2] = reg_addr | 0x80; // Set the read bit
+    command[3] = 0; // Data not used for reading
+    command[4] = 0;
+    command[5] = 0;
+
+    // Calculate CRC TODO: finish Checksum function
+    //command[7] = CHECKSUM -- OPTIONAL
+
+    // Send command
+    HAL_UART_Transmit(motor->driver->huart, command, sizeof(command), HAL_MAX_DELAY);
+
+    // Receive response
+    HAL_UART_Receive(motor->driver->huart, reply, sizeof(reply), HAL_MAX_DELAY);
+
+    // Parse response
+    data = (reply[1] | (reply[2] << 8) | (reply[3] << 16) | (reply[4] << 24));
+
+    return data;
+}
+
+
+void calculate_crc(){
+	// TODO
+}
+
+
+
 
 
 

@@ -9,10 +9,14 @@ Motor motors[MAX_MOTORS];
 void initializeMotors() {
     // Initialize each motor in the array
     for (int i = 0; i < MAX_MOTORS; i++) {
+    	// Setting all drivers on the same UART BUS
+    	motor[i].driver.id = i + 1;
+    	motor[i].driver.huart = &huart2;
+    	motor[i].driver.address =0x0(i + 1);
     	// Motor Parameters
     	motors[i].driver.id = i + 1;
         motors[i].stepsTaken = 0;
-        motors[i].totalSteps = 0;
+        motors[i].nextTotalSteps = 0;
         motors[i].isStepping = false;
 
         // motor 1 configurations

@@ -11,7 +11,10 @@ extern TIM_HandleTypeDef htim2; // Motor 1
 
 // Driver structure
 typedef struct { // TODO: ADD UART support
-	uint8_t id;                       // Motor ID to identify each motor
+	uint8_t id;                       // Motor ID to identify each motor -- this is useless now ince we have address for uart
+
+    UART_HandleTypeDef *huart;
+    uint8_t address;                // UART address
 
     TIM_HandleTypeDef *htim;        // Timer handle for PWM generation
     uint32_t step_channel;           // PWM channel
@@ -35,7 +38,7 @@ typedef struct { // TODO: ADD UART support
 typedef struct { // TODO: Implement this to stepping and countSteps later.
     TMC2209_Driver driver;         // Driver settings for the motor
     uint32_t stepsTaken;           // Count of steps taken
-    uint32_t totalSteps;           // Total steps the motor should take
+    uint32_t nextTotalSteps;           // Total steps the motor should take
     bool isStepping;               // State to track if the motor is currently stepping
 } Motor;
 
