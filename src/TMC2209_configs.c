@@ -3,7 +3,8 @@
 
 
 // UART declaration
-UART_HandleTypeDef huart2;
+// UART_HandleTypeDef huart2; in my case it's already generated in main.c
+
 
 // Motor  definition
 Motor motors[MAX_MOTORS];
@@ -12,7 +13,7 @@ void initializeMotors() {
     // Initialize each motor in the array
     for (int i = 0; i < MAX_MOTORS; i++) {
     	// Setting all drivers on the same UART BUS
-    	motors[i].driver.huart = &huart2;
+    	motors[i].driver.huart = &huart2; // UART handler
     	motors[i].driver.address = 0x00 + i; // Address : 0x00, 0x01 ... Depends on MS1 AND MS2
 
     	// Motor Parameters
@@ -32,10 +33,10 @@ void initializeMotors() {
         motors[i].driver.step_pin = GPIO_PIN_10;
         motors[i].driver.dir_port = GPIOF;
         motors[i].driver.dir_pin = GPIO_PIN_9;
-        motors[i].driver.enn_port = GPIOD;
-        motors[i].driver.enn_pin = GPIO_PIN_1;
-        motors[i].driver.diag_port = GPIOB;
-        motors[i].driver.diag_pin = GPIO_PIN_11;
+        motors[i].driver.enn_port = GPIOB;
+        motors[i].driver.enn_pin = GPIO_PIN_11;
+        motors[i].driver.diag_port = GPIOD;
+        motors[i].driver.diag_pin = GPIO_PIN_1;
         motors[i].driver.index_port = GPIOA;
         motors[i].driver.index_pin = GPIO_PIN_5;
         }

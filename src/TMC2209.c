@@ -1,5 +1,7 @@
 #include "TMC2209.h"
 #include "TMC2209_configs.h"
+#include "string.h"
+
 
 // Set the direction of the motor
 void TMC2209_SetDirection(Motor *motor, GPIO_PinState state) {
@@ -69,7 +71,7 @@ static void TMC2209_CountSteps(Motor *motor, uint32_t totalSteps){ // Static for
 	motor->nextTotalSteps = totalSteps;
 	motor->stepsTaken = 0;
 	while (motor->stepsTaken <= motor->nextTotalSteps); // Wait until we reach required steps
-	HAL_Delay(1); // To not fad the cpu
+	HAL_Delay(1); // To not fad the cpu --NOTE: CHECK IF THERE SHOULD BE A DELAY
 
 	motor->nextTotalSteps = 0;
 }
@@ -95,10 +97,9 @@ uint8_t calculate_crc(uint8_t *data, uint8_t length) {
     return crc; // Return calculated CRC
 }
 
-
 void TMC2209_SendCommand(Motor *motor, uint8_t reg_addr, uint32_t data) {
     uint8_t command[8];
-    command[0] = 0x00; // Start byte
+    command[0] = 0x05; // Start byte
     command[1] = motor->driver.address; // Driver address
     command[2] = reg_addr; // Register address
     command[3] = (data & 0xFF); // Send data (lower byte)
@@ -107,40 +108,63 @@ void TMC2209_SendCommand(Motor *motor, uint8_t reg_addr, uint32_t data) {
     command[6] = (data >> 24) & 0xFF;
 
     // Calculate CRC -- optional
-    command[7] = calculate_crc(command, sizeof(command) - 1);
+    command[7] = calculate_crc(command, 7);
 
     // Transmit via UART
-    HAL_UART_Transmit(motor->driver.huart, command, sizeof(command), HAL_MAX_DELAY);
+    HAL_UART_Transmit(motor->driver.huart, command, 8, 10);
 }
 
 // Read a register from the driver
 uint32_t TMC2209_ReadRegister(Motor *motor, uint8_t reg_addr) {
-    uint8_t command[8];
-    uint8_t reply[6]; // Expected response size
+    uint8_t command[7];
+    // Expected response size
+    uint8_t reply[8];
     uint32_t data = 0;
-
     // Prepare read command
-    command[0] = 0x00; // Start byte
+    command[0] = 0x05; // Start byte for TMC2209
     command[1] = motor->driver.address; // Driver address
     command[2] = reg_addr | 0x80; // Set the read bit
     command[3] = 0; // Data not used for reading
     command[4] = 0;
     command[5] = 0;
 
-    // Calculate CRC TODO: finish Checksum function
-    command[6] = calculate_crc(command, sizeof(command) - 1);
+    // Calculate CRC  TODO: finish Checksum function -- DONE
+    command[6] = calculate_crc(command, 7);
 
     // Send command
-    HAL_UART_Transmit(motor->driver.huart, command, sizeof(command), HAL_MAX_DELAY);
-
+    if(HAL_UART_Transmit(motor->driver.huart, command, 7, 10)  != HAL_OK){
+    return TMC2209_UART_ERROR_TX;
+    }
     // Receive response
-    HAL_UART_Receive(motor->driver.huart, reply, sizeof(reply), HAL_MAX_DELAY);
+    if(HAL_UART_Receive(motor->driver.huart, reply, 8, 10) != HAL_OK){
+    return TMC2209_UART_ERROR_RX;
+    }
 
-    // Parse response
-    data = (reply[1] | (reply[2] << 8) | (reply[3] << 16) | (reply[4] << 24));
+    /////// DEBUGGING: What the driver is sending back ///////
+    /*
+    printf("Received Reply: ");
+    for (int i = 0; i < sizeof(reply); i++) {
+        printf("0x%02X ", reply[i]); // Print each byte
+    }*/
 
-    return data;
+    ////////////////////////////////////////////////////////
+
+    // Validate reply
+    if (reply[0] != 0x05 || reply[1] != motor->driver.address || reply[2] != (reg_addr | 0x80)){
+        return TMC2209_INVALID_ADDRESS;
+    }
+
+       // Verify CRC
+    uint8_t received_crc = reply[7];
+   if (received_crc != calculate_crc(reply, 7)){
+   return TMC2209_UART_ERROR_CRC; // CRC error
+   }
+
+       // Parse the 4-byte data payload from reply
+   data = (reply[3]) | (reply[4] << 8) | (reply[5] << 16) | (reply[6] << 24);
+        return data;
 }
+
 
 
 
