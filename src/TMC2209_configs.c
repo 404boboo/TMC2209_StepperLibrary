@@ -14,7 +14,7 @@ void initializeMotors() {
     for (int i = 0; i < MAX_MOTORS; i++) {
     	// Setting all drivers on the same UART BUS
     	motors[i].driver.huart = &huart2; // UART handler
-    	motors[i].driver.address = 0x00 + i; // Address : 0x00, 0x01 ... Depends on MS1 AND MS2
+    	motors[i].driver.address = 0x00+i; // Address : 0x00, 0x01 ... Depends on MS1 AND MS2
 
     	// Motor Parameters
     	motors[i].driver.id = i + 1;

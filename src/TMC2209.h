@@ -45,61 +45,28 @@
 
 #include "stm32f7xx_hal.h"
 #include "TMC2209_configs.h"
+#include "TMC2209_register.h"
 #include <stdio.h>
 
 
-// Register addresses
-#define TMC2209_REG_GCONF        0x00
-#define TMC2209_REG_GSTAT        0x01
-#define TMC2209_REG_IFCNT        0x02
-#define TMC2209_REG_SLAVECONF    0x03
-#define TMC2209_REG_OTP_PROG     0x04
-#define TMC2209_REG_OTP_READ     0x05
-#define TMC2209_REG_IOIN         0x06
-#define TMC2209_REG_FACTORY_CONF 0x07
-
-#define TMC2209_REG_IHOLD_IRUN   0x10
-#define TMC2209_REG_TPOWERDOWN   0x11
-#define TMC2209_REG_TSTEP        0x12
-#define TMC2209_REG_TPWMTHRS     0x13
-#define TMC2209_REG_VACTUAL      0x22
-
-#define TMC2209_REG_TCOOLTHRS    0x14
-#define TMC2209_REG_SGTHRS       0x40
-#define TMC2209_REG_SG_RESULT    0x41
-#define TMC2209_REG_COOLCONF     0x42
-#define TMC_REG_SENDDELAY 		 0x03
-#define TMC_REG_GCONF 			 0x00
-#define TMC2209_REG_MSCNT        0x6A
-#define TMC2209_REG_MSCURACT     0x6B
-#define TMC2209_REG_CHOPCONF     0x6C
-#define TMC2209_REG_DRVSTATUS    0x6F
-#define TMC2209_REG_PWMCONF      0x70
-#define TMC2209_REG_PWM_SCALE    0x71
-#define TMC2209_REG_PWM_AUTO     0x72
-
-// GCONF register bit positions
-#define TMC2209_I_SCALE_ANALOG_POS   0
-#define TMC2209_INTERNAL_RSENSE_POS  1
-#define TMC2209_EN_SPREADCYCLE_POS   2
-#define TMC2209_SHAFT_POS            3
-#define TMC2209_INDEX_OTPW_POS       4
-#define TMC2209_INDEX_STEP_POS       5
-#define TMC2209_PDN_DISABLE_POS      6
-#define TMC2209_MSTEP_REG_SELECT_POS 7
-#define TMC2209_MULTISTEP_FILT_POS   8
-#define TMC2209_TEST_MODE_POS        9
 
 
 
-// Datagram & other
+
+// Datagrams
 #define TMC_WRITE_DATAGRAM_SIZE  		8
 #define TMC_READ_REQUEST_DATAGRAM_SIZE  4
 #define RX_REPLY_SIZE 					12 	// This should be 8 which is basically TMC_REPLY_SIZE however, the receive interrupt cannot be triggered after transmitting so we have to ignore first 4 bytes that is transmitted for read request
 #define TMC_REPLY_SIZE           		8	// Actual Bytes that TMC2209 sends back
+
+// Macros & other
+#define ENABLE_DEBUG					1
 #define SYNC 							0x05     // Sync byte value for communication
 #define SENDDELAY_MULTIPLIER 			8 		// 8-bit times per SENDDELAY unit
 #define BAUD_RATE 						115200
+#define TMC_ERROR						-1
+#define TMC_OK							0
+
 
 
 
@@ -108,9 +75,10 @@ extern UART_HandleTypeDef huart2; // huart which will be used to communicate
 extern UART_HandleTypeDef huart3; // Used for debugging
 extern TIM_HandleTypeDef htim3;
 extern uint32_t last_tmc_read_attempt_ms;
-extern uint8_t rxData[RX_REPLY_SIZE]; // Buffer to track all received data
+extern uint8_t rxData[TMC_REPLY_SIZE + 1]; // Buffer to track all received data
 extern uint8_t rxBuffer[TMC_REPLY_SIZE]; // Buffer store the actual received 8 bytes
 extern volatile uint8_t dataReadyFlag ; // Flag to indicate data reception
+extern uint32_t stepsTaken;
 //extern volatile uint32_t stepsTaken;
 
 // Function prototypes
@@ -129,14 +97,24 @@ void TMC2209_checkStatus(Motor *motor, bool *isStepping, uint32_t *nextTotalStep
 
 //// UART TMC2209 ////
 uint8_t calculate_CRC(uint8_t *datagram, uint8_t length);
-uint8_t* TMC2209_sendCommand(uint8_t *command, size_t writeLength, size_t readLength);
-void TMC2209_writeInt(Motor *tmc2209, uint8_t address, int32_t value);
-int32_t TMC2209_readInt(Motor *tmc2209, uint8_t address);
+uint8_t *TMC2209_sendCommand(uint8_t *command, size_t writeLength, size_t readLength);
+void TMC2209_writeInit(Motor *tmc2209, uint8_t regAddress, int32_t value);
+int32_t TMC2209_readInit(Motor *tmc2209, uint8_t regAddress);
+uint8_t TMC2209_waitForReply(uint32_t timeout);
 
-//// UART Configurations ////
-void enable_driver_PDNuart(Motor *tmc2209);
+//// TMC2209 configuration functions (UART)  ////
+void TMC2209_enable_PDNuart(Motor *tmc2209);
+void configureGCONF(Motor *tmc2209);
+uint8_t TMC2209_read_ifcnt(Motor *tmc2209);
+void setMicrosteppingResolution(Motor *tmc2209, uint16_t resolution);
+uint16_t checkMicrosteppingResolution(Motor *tmc2209);
 uint8_t TMC2209_SetSpreadCycle(Motor *motor, uint8_t enable);
-
+uint8_t checkSpreadCycle(Motor *tmc2209);
+void TMC2209_setIRUN(Motor *tmc2209, uint8_t irun_value);
+uint8_t TMC2209_readIRUN(Motor *tmc2209);
+void testIHOLDIRUN(Motor *tmc2209, uint8_t irun, uint8_t ihold, uint8_t iholddelay);
+uint16_t TMC2209_readStallGuardResult(Motor *tmc2209);
+void TMC2209_setStallGuardThreshold(Motor *tmc2209, uint8_t sgthrs);
 
 //// Debug ////
 void debug_print(const char* msg);

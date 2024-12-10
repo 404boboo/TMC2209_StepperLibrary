@@ -12,7 +12,7 @@ extern TIM_HandleTypeDef htim2; // Motor 1
 
 
 // Driver structure
-typedef struct { // TODO: ADD UART support
+typedef struct {
 	uint8_t id;                       // Motor ID to identify each motor -- this is useless now ince we have address for uart
 
     UART_HandleTypeDef *huart;
@@ -37,16 +37,17 @@ typedef struct { // TODO: ADD UART support
 } TMC2209_Driver;
 
 
-typedef struct { // TODO: Implement this to stepping and countSteps later.
+typedef struct {
     TMC2209_Driver driver;         // Driver settings for the motor
     uint32_t stepsTaken;           // Count of steps taken
     uint32_t nextTotalSteps;           // Total steps the motor should take
+    uint32_t currentPosition;		// current position of the motor on the axis
     bool isStepping;               // State to track if the motor is currently stepping
 } Motor;
 
 
 // Motors
-#define MAX_MOTORS 1 // Max motors to be added -- You can handle upto 8 TMC2209 drivers on the same UART BUS
+#define MAX_MOTORS 1 // Max motors to be added -- You can handle upto 4 TMC2209 drivers on the same UART BUS
 extern Motor motors[MAX_MOTORS]; // Global motor array
 
 
